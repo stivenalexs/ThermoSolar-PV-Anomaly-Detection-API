@@ -44,7 +44,11 @@ async def startup_event():
         except Exception as e:
             print(f"[ERROR] Hubo un problema al cargar el modelo: {e}")
     else:
-        print(f"[WARNING] Modelo no encontrado en {MODEL_PATH}. Asegúrate de entrenarlo primero.")
+        print(f"[WARNING] Modelo no encontrado en {MODEL_PATH}. Asegúrate de subirlo o entrenarlo.")
+
+@app.get("/")
+async def root():
+    return {"message": "Solar Anomaly Detection API is running. Go to /docs for documentation."}
 
 @app.post("/predict")
 async def predict_anomaly(file: UploadFile = File(...)):
@@ -52,7 +56,7 @@ async def predict_anomaly(file: UploadFile = File(...)):
     Endpoint de predicción que recibe una imagen y retorna las detecciones.
     """
     if model is None:
-        raise HTTPException(status_code=503, detail="El modelo no está cargado o no existe aún. Por favor entrena el modelo primero.")
+        raise HTTPException(status_code=503, detail="El modelo no está cargado. Asegúrate de que best.pt existe en el servidor.")
         
     # Verificar formato (básico)
     if not file.content_type.startswith("image/"):
@@ -68,7 +72,7 @@ async def predict_anomaly(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="No se pudo decodificar la imagen.")
 
         # Realizar la inferencia
-        # Usamos imgsz=640 por defecto, igual que en el entrenamiento
+        # Usamos imgsz=640 por defecto
         results = model.predict(source=img, imgsz=640, conf=0.25)
         result = results[0]
 
@@ -76,13 +80,10 @@ async def predict_anomaly(file: UploadFile = File(...)):
         detections = []
         for box in result.boxes:
             # box.xyxy: [x_min, y_min, x_max, y_max]
-            # box.conf: confianza
-            # box.cls: clase
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             conf = float(box.conf[0].item())
             cls_id = int(box.cls[0].item())
             
-            # Ancho y alto para un formato de respuesta más amigable
             w = x2 - x1
             h = y2 - y1
 
@@ -107,10 +108,9 @@ async def predict_anomaly(file: UploadFile = File(...)):
         })
 
     except Exception as e:
-        # Manejo de cualquier error inesperado durante el procesamiento
         raise HTTPException(status_code=500, detail=f"Error interno procesando la imagen: {str(e)}")
 
 if __name__ == "__main__":
-    # Para ejecutar en desarrollo: python main.py
-    # Opcional: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Importante: Bind a 0.0.0.0 y usar el puerto de la variable de entorno o 3000
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

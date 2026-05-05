@@ -1,0 +1,6 @@
+{
+  "name": "SolarPanelAnomalyDetection",
+  "description": "API para la detección de anomalías en paneles solares fotovoltaicos usando YOLOv9, optimizada para despliegue en Railway.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
