@@ -117,7 +117,7 @@ export default function App() {
     formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post<ApiResponse>('/predict', formData, {
+      const response = await axios.post<ApiResponse>('/api/predict', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
