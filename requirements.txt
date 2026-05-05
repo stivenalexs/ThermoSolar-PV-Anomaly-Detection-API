@@ -1,0 +1,17 @@
+# PyTorch y TorchVision para soporte de GPU
+# Se recomienda instalar con el comando oficial de PyTorch para asegurar compatibilidad CUDA en Windows/Linux.
+# Ejemplo para CUDA 11.8: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Ultralytics incluye soporte nativo para YOLOv8 y YOLOv9
+ultralytics>=8.1.0
+
+# Para la API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Procesamiento de imágenes
+opencv-python>=4.8.0
+numpy>=1.23.0

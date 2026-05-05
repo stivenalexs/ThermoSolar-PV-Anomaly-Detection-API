@@ -1,0 +1,16 @@
+# Dataset Path Configurations
+path: ImageSet  # Ruta base relativa al directorio actual
+train: train/images  # Ruta de imágenes de entrenamiento
+val: valid/images    # Ruta de imágenes de validación
+test: test/images    # Ruta de imágenes de prueba (opcional)
+
+# Classes
+names:
+  0: Single Hotspot
+  1: Multi Hotspots
+  2: Single Diode
+  3: Multi Diode
+  4: Single Bypassed Substring
+  5: Multi Bypassed Substring
+  6: String Open Circuit
+  7: String Reversed Polarity
