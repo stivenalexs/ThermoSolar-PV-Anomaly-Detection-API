@@ -9,9 +9,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Instala dependencias del sistema necesarias para OpenCV y operaciones en general
-# (opencv-python-headless evita necesitar libgl1-mesa-glx, pero libglib2.0-0 es recomendable)
+# (Ultralytics y OpenCV requieren ciertas librerías del sistema compartidas)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
+    libgl1-mesa-glx \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copia los archivos de requerimientos primero para aprovechar el caché de capas de Docker
