@@ -1,0 +1,11 @@
+# Ignorar archivos del backend en el despliegue de Vercel
+# Vercel no debe intentar construir el backend de Python, ya que excede el límite de tamaño y ahora está en Railway.
+requirements.txt
+main.py
+predict.py
+best.pt
+best(no mio).pt
+Dockerfile
+.dockerignore
+venv/
+__pycache__/

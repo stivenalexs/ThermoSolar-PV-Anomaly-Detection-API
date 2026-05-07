@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import uvicorn
 import cv2
@@ -11,6 +12,15 @@ app = FastAPI(
     title="ThermoSolar-PV Anomaly Detection API",
     description="API para la detección de anomalías en paneles solares fotovoltaicos usando YOLOv9.",
     version="1.0.0"
+)
+
+# Configurar CORS para permitir peticiones desde Vercel u otros dominios
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # En producción puedes poner tu dominio de Vercel aquí
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Variable global para el modelo
