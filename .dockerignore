@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos de caché y logs de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+
+# Archivos del frontend/Node
+node_modules/
+dist/
+build/
+.next/
+package.json
+package-lock.json
+tsconfig.json
+vite.config.ts
+
+# Archivos temporales o de configuración locales
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Modelos y datos grandes que no deben ir (excepto best.pt que lo necesitamos, por lo tanto excluyo posibles archivos crudos)
+# Si tienes imágenes de prueba, es mejor ignorarlas para no inflar la imagen
+ImageSet/
+dataset/
+runs/
+*.mp4
+*.avi
+
+# No ignoramos best.pt ya que es necesario para la inferencia,
+# pero en caso de que tengas otros archivos .pt pesados que no sean best.pt
+best(no mio).pt
+yolov9*.pt
