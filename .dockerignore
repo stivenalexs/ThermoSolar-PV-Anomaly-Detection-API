@@ -1,47 +1,60 @@
-# Git
+# Control de versiones y CI
 .git
+.github
 .gitignore
+.dockerignore
+.vercelignore
 
-# Entornos virtuales
+# Entornos virtuales y variables locales
+.venv/
 venv/
 env/
-.env
+.env*
 
-# Archivos de caché y logs de Python
+# Caché, tests y notebooks
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-pip-log.txt
-pip-delete-this-directory.txt
+*.py[cod]
 .pytest_cache/
+.ipynb_checkpoints/
+tests/
+pytest.ini
+requirements-dev.txt
+notebooks/
+predict.py
+solar_data.yaml
+docs/
+README.md
+LICENSE
+Procfile
 
-# Archivos del frontend/Node
+# Frontend y Node.js
 node_modules/
 dist/
 build/
 .next/
+src/
+public/
+index.html
 package.json
 package-lock.json
 tsconfig.json
 vite.config.ts
+vercel.json
 
-# Archivos temporales o de configuración locales
+# Agentes e IDE locales
+.agents/
+opencode.json
+skills-lock.json
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Modelos y datos grandes que no deben ir (excepto best.pt que lo necesitamos, por lo tanto excluyo posibles archivos crudos)
-# Si tienes imágenes de prueba, es mejor ignorarlas para no inflar la imagen
+# Datasets, salidas y checkpoints auxiliares (solo best.pt entra en la imagen)
 ImageSet/
 dataset/
 runs/
 *.mp4
 *.avi
-
-# No ignoramos best.pt ya que es necesario para la inferencia,
-# pero en caso de que tengas otros archivos .pt pesados que no sean best.pt
-best(no mio).pt
-yolov9*.pt
+*.pt
+!best.pt

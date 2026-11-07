@@ -35,6 +35,9 @@ interface Detection {
 interface ApiResponse {
   status: string;
   message: string;
+  image_width: number;
+  image_height: number;
+  inference_ms: number;
   detections: Detection[];
 }
 
@@ -44,12 +47,19 @@ interface HistoryItem {
   date: string;
   time: string;
   day: string;
+  image_width?: number;
+  image_height?: number;
+  inference_ms?: number;
   detections: Detection[];
 }
 
 type View = 'upload' | 'history' | 'stats';
 
 // --- Constants ---
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_HISTORY_ITEMS = 50;
 
 const COLORS = [
   '#f97316', // Hotspot Orange
@@ -63,11 +73,18 @@ const COLORS = [
 ];
 
 const CLASS_NAMES_LIST = [
-  "Single Hotspot", "Multi Hotspots", "Single Diode", "Multi Diode",
-  "Single Bypassed Substring", "Multi Bypassed Substring", "String Open Circuit", "String Reversed Polarity"
+  "Multi Bypassed Substring", "Multi Diode", "Multi Hotspots", "Single Bypassed Substring",
+  "Single Diode", "Single Hotspot", "String Open Circuit", "String Reversed Polarity"
 ];
 
 // --- Helper Functions ---
+
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+};
 
 const formatDate = (date: Date) => {
   const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
@@ -82,10 +99,24 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    try {
+      const savedHistory = localStorage.getItem('solar_history');
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          return parsed.slice(0, MAX_HISTORY_ITEMS);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load history', e);
+    }
+    return [];
+  });
   const [hoveredDetectionIndex, setHoveredDetectionIndex] = useState<number | null>(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoryItem | null>(null);
   const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
@@ -99,31 +130,48 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load history from localStorage on mount
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('solar_history');
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error('Failed to load history', e);
-      }
-    }
-  }, []);
+  const activeImageWidth = results?.image_width || imageDimensions.width || 640;
+  const activeImageHeight = results?.image_height || imageDimensions.height || 640;
 
-  // Save history to localStorage when it changes
+  // Save history to localStorage when it changes (capped at MAX_HISTORY_ITEMS)
   useEffect(() => {
-    localStorage.setItem('solar_history', JSON.stringify(history));
+    try {
+      localStorage.setItem('solar_history', JSON.stringify(history.slice(0, MAX_HISTORY_ITEMS)));
+    } catch (e) {
+      console.error('Failed to save history to localStorage', e);
+    }
   }, [history]);
+
+  const selectValidatedFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('El archivo debe ser una imagen válida (JPG, PNG, GIF, WEBP).');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError('El archivo excede el tamaño máximo permitido de 10 MB.');
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setResults(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    const probe = new Image();
+    probe.onload = () => {
+      setImageDimensions({ width: probe.naturalWidth, height: probe.naturalHeight });
+    };
+    probe.src = url;
+
+    setSelectedFile(file);
+    setPreviewUrl(url);
+    setResults(null);
+    setError(null);
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      setResults(null);
-      setError(null);
+      selectValidatedFile(file);
     }
   };
 
@@ -143,21 +191,17 @@ export default function App() {
     setDragActive(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        setSelectedFile(file);
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
-        setResults(null);
-        setError(null);
-      } else {
-        setError('El archivo debe ser una imagen (JPG, PNG).');
-      }
+      selectValidatedFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setError('El archivo excede el tamaño máximo permitido de 10 MB.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -165,29 +209,46 @@ export default function App() {
     formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post<ApiResponse>('https://web-production-4963b.up.railway.app/predict', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const response = await axios.post<ApiResponse>(`${API_URL}/predict`, formData, {
+        timeout: 60000,
       });
       
       const newResults = response.data;
       setResults(newResults);
+      if (newResults.image_width > 0 && newResults.image_height > 0) {
+        setImageDimensions({ width: newResults.image_width, height: newResults.image_height });
+      }
 
-      // Add to history
+      // Add to history (limited to latest 50 inspections)
       const { date, time, day } = formatDate(new Date());
       const newHistoryItem: HistoryItem = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         filename: selectedFile.name,
         date,
         time,
         day,
+        image_width: newResults.image_width,
+        image_height: newResults.image_height,
+        inference_ms: newResults.inference_ms,
         detections: newResults.detections
       };
 
-      setHistory(prev => [newHistoryItem, ...prev]);
+      setHistory(prev => [newHistoryItem, ...prev].slice(0, MAX_HISTORY_ITEMS));
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Error al conectar con la API de IA. Revisa la conectividad del servidor.');
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string' && detail.trim().length > 0) {
+          setError(detail);
+        } else if (err.code === 'ECONNABORTED') {
+          setError('La solicitud excedió el tiempo límite de 60 segundos.');
+        } else {
+          setError('Error al conectar con la API de IA. Revisa la conectividad del servidor.');
+        }
+      } else {
+        setError('Error inesperado al procesar la solicitud.');
+      }
     } finally {
       setLoading(false);
     }
@@ -210,12 +271,13 @@ export default function App() {
     }
   };
 
-  // Tracking coords inside thermal viewport
+  // Tracking coords inside thermal viewport using real image dimensions
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imageContainerRef.current) return;
     const rect = imageContainerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(640, Math.round(((e.clientX - rect.left) / rect.width) * 640)));
-    const y = Math.max(0, Math.min(640, Math.round(((e.clientY - rect.top) / rect.height) * 640)));
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = Math.max(0, Math.min(activeImageWidth, Math.round(((e.clientX - rect.left) / rect.width) * activeImageWidth)));
+    const y = Math.max(0, Math.min(activeImageHeight, Math.round(((e.clientY - rect.top) / rect.height) * activeImageHeight)));
     setMouseCoords({ x, y });
   };
 
@@ -266,7 +328,17 @@ export default function App() {
   }, [history]);
 
   // Procedural Thermal Reconstruction component for History Drawer
-  const ThermalReconstruction = ({ detections }: { detections: Detection[] }) => {
+  const ThermalReconstruction = ({
+    detections,
+    imageWidth = 640,
+    imageHeight = 640,
+  }: {
+    detections: Detection[];
+    imageWidth?: number;
+    imageHeight?: number;
+  }) => {
+    const viewW = imageWidth > 0 ? imageWidth : 640;
+    const viewH = imageHeight > 0 ? imageHeight : 640;
     return (
       <div className="relative w-full aspect-video bg-[#09090b] border border-white/5 rounded-xl overflow-hidden flex items-center justify-center">
         {/* Background Solar Cell Grid Layout */}
@@ -280,7 +352,7 @@ export default function App() {
         </svg>
 
         {/* Dynamic Heat Gradient Maps */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 640 640">
+        <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${viewW} ${viewH}`}>
           <defs>
             {detections.map((d, i) => (
               <radialGradient key={i} id={`hist-heat-${i}`} cx="50%" cy="50%" r="50%">
@@ -414,12 +486,12 @@ export default function App() {
               <span className="text-zinc-300">YOLOv9-Small (FineTuned)</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-zinc-900/60">
-              <span className="text-zinc-500">Resolución</span>
+              <span className="text-zinc-500">Entrada del modelo</span>
               <span className="text-zinc-300">640x640px</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-zinc-900/60">
-              <span className="text-zinc-500">Precisión mAP</span>
-              <span className="text-zinc-300 font-bold text-telemetry-cyan">94.2%</span>
+              <span className="text-zinc-500">mAP50 / mAP50-95</span>
+              <span className="text-zinc-300 font-bold text-telemetry-cyan">75.15% / 55.29%</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-zinc-900/60">
               <span className="text-zinc-500">Clases Clínicas</span>
@@ -444,7 +516,7 @@ export default function App() {
             
             {results && (
               <span className="bg-telemetry-orange/10 text-telemetry-orange text-[9px] px-2.5 py-0.5 rounded font-mono border border-telemetry-orange/20 tracking-wider">
-                NODE_DIAGNOSED_OK
+                NODE_DIAGNOSED_OK · {results.inference_ms.toFixed(1)}ms
               </span>
             )}
           </div>
@@ -461,20 +533,29 @@ export default function App() {
                 ref={imageContainerRef}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={() => setMouseCoords(null)}
-                className="relative max-w-full rounded-xl overflow-hidden shadow-2xl border border-white/5 cursor-crosshair group select-none"
+                className="relative w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl border border-white/5 cursor-crosshair group select-none"
               >
                 <img 
                   src={previewUrl} 
-                  className="max-h-[50vh] object-contain block transition-all duration-500" 
+                  onLoad={(e) => {
+                    const nw = e.currentTarget.naturalWidth;
+                    const nh = e.currentTarget.naturalHeight;
+                    if (nw > 0 && nh > 0) {
+                      setImageDimensions((prev) =>
+                        prev.width === nw && prev.height === nh ? prev : { width: nw, height: nh }
+                      );
+                    }
+                  }}
+                  className="w-full h-auto block transition-all duration-500" 
                   alt="Termografía" 
                 />
                 
                 {/* HUD Crosshairs Following Cursor */}
                 {mouseCoords && (
                   <>
-                    <div className="absolute left-0 right-0 h-[0.5px] bg-telemetry-orange/30 pointer-events-none" style={{ top: `${(mouseCoords.y / 640) * 100}%` }} />
-                    <div className="absolute top-0 bottom-0 w-[0.5px] bg-telemetry-orange/30 pointer-events-none" style={{ left: `${(mouseCoords.x / 640) * 100}%` }} />
-                    <div className="absolute text-[8px] font-mono text-telemetry-orange bg-zinc-950/80 px-1 py-0.5 border border-telemetry-orange/20 rounded pointer-events-none shadow" style={{ left: `${(mouseCoords.x / 640) * 100 + 2}%`, top: `${(mouseCoords.y / 640) * 100 + 2}%` }}>
+                    <div className="absolute left-0 right-0 h-[0.5px] bg-telemetry-orange/30 pointer-events-none" style={{ top: `${(mouseCoords.y / activeImageHeight) * 100}%` }} />
+                    <div className="absolute top-0 bottom-0 w-[0.5px] bg-telemetry-orange/30 pointer-events-none" style={{ left: `${(mouseCoords.x / activeImageWidth) * 100}%` }} />
+                    <div className="absolute text-[8px] font-mono text-telemetry-orange bg-zinc-950/80 px-1 py-0.5 border border-telemetry-orange/20 rounded pointer-events-none shadow" style={{ left: `${Math.min(84, (mouseCoords.x / activeImageWidth) * 100 + 2)}%`, top: `${Math.min(92, (mouseCoords.y / activeImageHeight) * 100 + 2)}%` }}>
                       X:{mouseCoords.x} Y:{mouseCoords.y}
                     </div>
                   </>
@@ -488,6 +569,8 @@ export default function App() {
                 {/* Interactive Bounding Boxes Overlay */}
                 {results && results.detections.map((d, index) => {
                   const isHovered = hoveredDetectionIndex === index;
+                  const imgWidth = results.image_width || activeImageWidth;
+                  const imgHeight = results.image_height || activeImageHeight;
                   return (
                     <div 
                       key={index}
@@ -500,10 +583,10 @@ export default function App() {
                           : 'border-telemetry-orange bg-telemetry-orange/5 z-20'}
                       `}
                       style={{
-                        left: `${(d.bbox.x_min / 640) * 100}%`,
-                        top: `${(d.bbox.y_min / 640) * 100}%`,
-                        width: `${(d.bbox.width / 640) * 100}%`,
-                        height: `${(d.bbox.height / 640) * 100}%`,
+                        left: `${(d.bbox.x_min / imgWidth) * 100}%`,
+                        top: `${(d.bbox.y_min / imgHeight) * 100}%`,
+                        width: `${(d.bbox.width / imgWidth) * 100}%`,
+                        height: `${(d.bbox.height / imgHeight) * 100}%`,
                       }}
                     >
                       <span className={`
@@ -751,7 +834,11 @@ export default function App() {
                   <h4 className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                     <Compass className="w-3.5 h-3.5 text-telemetry-cyan" /> Reconstitución de Telefirma
                   </h4>
-                  <ThermalReconstruction detections={selectedHistoryItem.detections} />
+                  <ThermalReconstruction
+                    detections={selectedHistoryItem.detections}
+                    imageWidth={selectedHistoryItem.image_width}
+                    imageHeight={selectedHistoryItem.image_height}
+                  />
                 </div>
 
                 {/* Anomaly breakdown */}
@@ -1135,7 +1222,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -5 }} 
                 transition={{ duration: 0.15, ease: 'easeOut' }}
               >
-                <UploadView />
+                {UploadView()}
               </motion.div>
             )}
             {currentView === 'history' && (
@@ -1146,7 +1233,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -5 }} 
                 transition={{ duration: 0.15, ease: 'easeOut' }}
               >
-                <HistoryView />
+                {HistoryView()}
               </motion.div>
             )}
             {currentView === 'stats' && (
@@ -1157,7 +1244,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -5 }} 
                 transition={{ duration: 0.15, ease: 'easeOut' }}
               >
-                <StatsView />
+                {StatsView()}
               </motion.div>
             )}
           </AnimatePresence>

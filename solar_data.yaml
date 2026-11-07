@@ -6,11 +6,11 @@ test: test/images    # Ruta de imágenes de prueba (opcional)
 
 # Classes
 names:
-  0: Single Hotspot
-  1: Multi Hotspots
-  2: Single Diode
-  3: Multi Diode
-  4: Single Bypassed Substring
-  5: Multi Bypassed Substring
+  0: Multi Bypassed Substring
+  1: Multi Diode
+  2: Multi Hotspots
+  3: Single Bypassed Substring
+  4: Single Diode
+  5: Single Hotspot
   6: String Open Circuit
   7: String Reversed Polarity
