@@ -1,38 +1,49 @@
-# Usa una imagen oficial de Python ligera
-FROM python:3.10-slim
+# Imagen oficial ligera de Python 3.11
+FROM python:3.11-slim
 
-# Establece el directorio de trabajo en el contenedor
+# Directorio de trabajo de la aplicación
 WORKDIR /app
 
-# Evita que Python escriba archivos .pyc en el disco y asegura que los logs se muestren en tiempo real
+# Variables de entorno base para Python, Ultralytics y puerto por defecto
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    YOLO_CONFIG_DIR=/tmp/Ultralytics \
+    PORT=3000
 
-# Instala dependencias del sistema necesarias para OpenCV y operaciones en general
-# (Ultralytics y OpenCV requieren ciertas librerías del sistema compartidas)
+# Dependencias del sistema requeridas por PyTorch (libgomp1), OpenCV y healthcheck (curl)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libgomp1 \
     libglib2.0-0 \
     libgl1 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia los archivos de requerimientos primero para aprovechar el caché de capas de Docker
-COPY requirements.txt .
+# Crear usuario sin privilegios de root para ejecutar el servicio
+RUN useradd --create-home --shell /bin/bash app && \
+    mkdir -p /tmp/Ultralytics && \
+    chown -R app:app /app /tmp/Ultralytics
 
-# Instala las dependencias de Python
+# Instalar únicamente las dependencias de producción aprovechando el caché de capas
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copia el código fuente de la API y el modelo al contenedor
-# Copiamos solo lo esencial para el backend para no saturar la imagen
-COPY main.py .
-COPY best.pt .
+# Copiar únicamente el servidor de la API y el checkpoint entrenado
+COPY --chown=app:app main.py best.pt ./
 
-# Expone el puerto (Railway define dinámicamente la variable de entorno $PORT)
+# Ejecutar bajo usuario no privilegiado
+USER app
+
+# Puerto expuesto (Railway inyecta dinámicamente $PORT en tiempo de ejecución)
 EXPOSE 3000
 
-# Comando para ejecutar la aplicación usando uvicorn
+# Verificación periódica del endpoint de salud
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD sh -c "curl -f http://localhost:${PORT:-3000}/health || exit 1"
+
+# Arrancar servidor ASGI Uvicorn
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-3000}"]

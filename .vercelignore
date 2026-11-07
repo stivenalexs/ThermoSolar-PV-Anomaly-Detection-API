@@ -1,11 +1,34 @@
-# Ignorar archivos del backend en el despliegue de Vercel
-# Vercel no debe intentar construir el backend de Python, ya que excede el límite de tamaño y ahora está en Railway.
+# Backend Python, Docker y tests (desplegados en Railway, no en Vercel)
 requirements.txt
+requirements-dev.txt
+pytest.ini
 main.py
+tests/
 predict.py
-best.pt
-best(no mio).pt
+solar_data.yaml
 Dockerfile
 .dockerignore
+Procfile
+
+# Pesos de modelos, datasets y resultados de entrenamiento
+*.pt
+best.pt
+ImageSet/
+dataset/
+runs/
+
+# Entornos virtuales y cachés de Python / Jupyter
+.venv/
 venv/
+env/
 __pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+notebooks/
+
+# Configuraciones locales de agentes y documentación auxiliar
+.agents/
+opencode.json
+skills-lock.json
+docs/
+.github/

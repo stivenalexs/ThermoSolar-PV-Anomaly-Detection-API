@@ -1,8 +1,34 @@
+# Dependencias y builds de Frontend
 node_modules/
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+
+# Entornos virtuales y caché de Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Variables de entorno y logs
 .env*
 !.env.example
+*.log
+.DS_Store
+
+# Pesos, datasets y artefactos de entrenamiento (excepto best.pt de producción)
+*.pt
+!best.pt
+runs/
+ImageSet/
+dataset/
+resultado_inferencia.jpg
+
+# Configuraciones locales de agentes y herramientas de desarrollo
+.agents/
+opencode.json
+skills-lock.json
